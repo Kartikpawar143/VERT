@@ -2,10 +2,10 @@ import { VertFile } from "$lib/types";
 import { Converter, FormatInfo } from "./converter.svelte";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { browser } from "$app/environment";
-import { error, log } from "$lib/logger";
+import { error, log } from "$lib/util/logger";
 import { m } from "$lib/paraglide/messages";
 import { Settings } from "$lib/sections/settings/index.svelte";
-import { ToastManager } from "$lib/toast/index.svelte";
+import { ToastManager } from "$lib/util/toast.svelte";
 
 // TODO: differentiate in UI? (not native formats)
 const videoFormats = [
@@ -320,6 +320,7 @@ export class FFmpegConverter extends Converter {
 	): Promise<string[]> {
 		const inputFormat = input.from.slice(1);
 		const outputFormat = to.slice(1);
+		const m4a = isAlac || to === ".m4a";
 
 		const lossless = [
 			"flac",
@@ -340,6 +341,7 @@ export class FFmpegConverter extends Converter {
 		let audioBitrateArgs: string[] = [];
 		let sampleRateArgs: string[] = [];
 		let metadataArgs: string[] = [];
+		let m4aArgs: string[] = [];
 
 		log(["converters", this.name], `keep metadata: ${keepMetadata}`);
 		if (!keepMetadata) {
@@ -398,14 +400,23 @@ export class FFmpegConverter extends Converter {
 			// detect sample rate of original file and use
 			if (isLosslessToLossy) {
 				// use safe default
-				sampleRateArgs = ["-ar", "44100"];
+				const defaultRate = to === ".opus" ? "48000" : "44100";
 				log(
 					["converters", this.name],
-					`converting from lossless to lossy, using default sample rate: 44100Hz`,
+					`converting from lossless to lossy, using default sample rate: ${defaultRate}Hz`,
 				);
+				sampleRateArgs = ["-ar", defaultRate];
 			} else {
-				const inputSampleRate =
-					await this.detectAudioSampleRate(ffmpeg);
+				let inputSampleRate = await this.detectAudioSampleRate(ffmpeg);
+				if (to === ".opus" && inputSampleRate === 44100) {
+					// special case: opus does not support 44100Hz which is more common - adjust to 48000Hz
+					log(
+						["converters", this.name],
+						"conversion to opus with 44100Hz sample rate detected, adjusting to 48000Hz",
+					);
+					inputSampleRate = 48000;
+				}
+
 				sampleRateArgs = inputSampleRate
 					? ["-ar", inputSampleRate.toString()]
 					: [];
@@ -500,9 +511,12 @@ export class FFmpegConverter extends Converter {
 			`Converting audio ${input.from} to audio ${to}`,
 		);
 		const { audio: audioCodec } = getCodecs(to, isAlac);
+		if (m4a && keepMetadata) m4aArgs = ["-c:v", "copy"]; // for album art
+
 		return [
 			"-i",
 			"input",
+			...m4aArgs,
 			"-c:a",
 			audioCodec,
 			...metadataArgs,

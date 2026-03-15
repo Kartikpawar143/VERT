@@ -2,14 +2,14 @@
 	import Panel from "$lib/components/visual/Panel.svelte";
 	import { PiggyBankIcon, CopyIcon, CheckIcon } from "lucide-svelte";
 	import HotMilk from "$lib/assets/hotmilk.svg?component";
-	import { DISCORD_URL } from "$lib/consts";
-	import { error } from "$lib/logger";
+	import { DISCORD_URL } from "$lib/util/consts";
+	import { error } from "$lib/util/logger";
 	import { m } from "$lib/paraglide/messages";
-	import { link } from "$lib/store/index.svelte";
-	import { ToastManager } from "$lib/toast/index.svelte";
+	import { link, sanitize } from "$lib/store/index.svelte";
+	import { ToastManager } from "$lib/util/toast.svelte";
 
 	let copied = false;
-	let timeoutId: number | undefined;
+	let timeoutId: NodeJS.Timeout | null = null;
 
 	function copyToClipboard() {
 		try {
@@ -48,11 +48,12 @@
 			</a>
 		</div>
 		<p class="text-muted">
-			{@html link(
+			{@html sanitize(link(
 				"discord_link",
 				m["about.sponsors.description"](),
 				DISCORD_URL,
-			)}
+				true
+			))}
 			<span class="inline-block mx-[2px] relative top-[2px]">
 				<button
 					id="email"
@@ -72,7 +73,7 @@
 	</div>
 </Panel>
 
-<style>
+<style lang="postcss">
 	#email {
 		@apply font-mono bg-gray-200 rounded-md px-1 text-inherit no-underline dynadark:bg-panel-alt dynadark:text-white;
 	}

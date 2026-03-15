@@ -3,7 +3,7 @@
 	import { goto, beforeNavigate, afterNavigate } from "$app/navigation";
 
 	import { PUB_PLAUSIBLE_URL, PUB_HOSTNAME } from "$env/static/public";
-	import { DISABLE_ALL_EXTERNAL_REQUESTS, VERT_NAME } from "$lib/consts";
+	import { DISABLE_ALL_EXTERNAL_REQUESTS, VERT_NAME } from "$lib/util/consts.js";
 	import * as Layout from "$lib/components/layout";
 	import * as Navbar from "$lib/components/layout/Navbar";
 	import featuredImage from "$lib/assets/VERT_Feature.webp";
@@ -20,10 +20,11 @@
 	} from "$lib/store/index.svelte";
 	import "$lib/css/app.scss";
 	import { browser } from "$app/environment";
-	import { page } from "$app/state";
-	import { initStores as initAnimStores } from "$lib/animation/index.js";
-	import { locales, localizeHref } from "$lib/paraglide/runtime";
+	import { initStores as initAnimStores } from "$lib/util/animation.js";
 	import { VertdInstance } from "$lib/sections/settings/vertdSettings.svelte.js";
+	import { ToastManager } from "$lib/util/toast.svelte.js";
+	import { m } from "$lib/paraglide/messages.js";
+	import { log } from "$lib/util/logger.js";
 
 	let { children, data } = $props();
 	let enablePlausible = $state(false);
@@ -46,13 +47,9 @@
 	const dropFiles = (e: DragEvent) => {
 		e.preventDefault();
 		dropping.set(false);
-		if (page.url.pathname !== "/jpegify/") {
-			const oldLength = files.files.length;
-			files.add(e.dataTransfer?.files);
-			if (oldLength !== files.files.length) goto("/convert");
-		} else {
-			files.add(e.dataTransfer?.files);
-		}
+		const oldLength = files.files.length;
+		files.add(e.dataTransfer?.files);
+		if (oldLength !== files.files.length) goto("/convert");
 	};
 
 	const handleDrag = (e: DragEvent, drag: boolean) => {
@@ -64,14 +61,9 @@
 		const clipboardData = e.clipboardData;
 		if (!clipboardData || !clipboardData.files.length) return;
 		e.preventDefault();
-
-		if (page.url.pathname !== "/jpegify/") {
-			const oldLength = files.files.length;
-			files.add(clipboardData.files);
-			if (oldLength !== files.files.length) goto("/convert");
-		} else {
-			files.add(clipboardData.files);
-		}
+		const oldLength = files.files.length;
+		files.add(clipboardData.files);
+		if (oldLength !== files.files.length) goto("/convert");
 	};
 
 	onMount(() => {
@@ -103,6 +95,16 @@
 				});
 		}
 
+		// detect if insecure context
+		if (!window.isSecureContext) {
+			log(["layout"], "Insecure context (HTTP) detected, some features may not work as expected -- you may want to enable \"PUB_DISABLE_FAILURE_BLOCKS\" on local deployments.");
+			ToastManager.add({
+				type: "warning",
+				message: m["toast.insecure_context"](),
+				disappearing: false,
+			});
+		}
+
 		return () => {
 			window.removeEventListener("paste", handlePaste);
 			window.removeEventListener("resize", handleResize);
@@ -130,7 +132,7 @@
 	/>
 	<meta
 		name="description"
-		content="With VERT you can quickly convert any image, video and audio file. No ads, no tracking, open source, and all processing (other than video) is done on your device."
+		content="With VERT, you can quickly convert any image, video, audio, and document file. No ads, no tracking, open source, and all processing (other than video) is done on your device."
 	/>
 	<meta property="og:url" content="https://vert.sh" />
 	<meta property="og:type" content="website" />
@@ -140,7 +142,7 @@
 	/>
 	<meta
 		property="og:description"
-		content="With VERT you can quickly convert any image, video and audio file. No ads, no tracking, open source, and all processing (other than video) is done on your device."
+		content="With VERT, you can quickly convert any image, video, audio, and document file. No ads, no tracking, open source, and all processing (other than video) is done on your device."
 	/>
 	<meta property="og:image" content={featuredImage} />
 	<meta name="twitter:card" content="summary_large_image" />
@@ -152,10 +154,11 @@
 	/>
 	<meta
 		property="twitter:description"
-		content="With VERT you can quickly convert any image, video and audio file. No ads, no tracking, open source, and all processing (other than video) is done on your device."
+		content="With VERT, you can quickly convert any image, video, audio, and document file. No ads, no tracking, open source, and all processing (other than video) is done on your device."
 	/>
 	<meta property="twitter:image" content={featuredImage} />
 	<link rel="manifest" href="/manifest.json" />
+	<link rel="canonical" href="https://vert.sh/" />
 	{#if enablePlausible}
 		<script
 			defer
@@ -192,15 +195,8 @@
 		<!-- 
 		SvelteKit throws the following warning when developing - safe to ignore as we render the children in this component:
 		`<slot />` or `{@render ...}` tag missing — inner content will not be rendered
-	-->
+		-->
 		<Layout.PageContent {children} />
-		<div style="display:none">
-			{#each locales as locale}
-				<a href={localizeHref(page.url.pathname, { locale })}
-					>{locale}</a
-				>
-			{/each}
-		</div>
 
 		<Layout.Toasts />
 		<Layout.Dialogs />

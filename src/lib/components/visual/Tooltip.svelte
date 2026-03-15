@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { fade } from "$lib/animation";
+	import { fade } from "$lib/util/animation";
 	interface Props {
 		children: () => any;
 		text: string;
@@ -9,7 +9,7 @@
 
 	let { children, text, className, position = "top" }: Props = $props();
 	let showTooltip = $state(false);
-	let timeout: number = 0;
+	let timeout: NodeJS.Timeout | null = null;
 	let triggerElement: HTMLElement;
 	let tooltipElement = $state<HTMLElement>();
 	let tooltipPosition = $state({ x: 0, y: 0 });
@@ -51,18 +51,33 @@
 
 	function hide() {
 		showTooltip = false;
-		clearTimeout(timeout);
+		if (timeout) clearTimeout(timeout);
+	}
+
+	function handleGlobalMouseMove(e: MouseEvent) {
+		if (!showTooltip || !triggerElement) return;
+
+		const triggerRect = triggerElement.getBoundingClientRect();
+		const isOverTrigger =
+			e.clientX >= triggerRect.left &&
+			e.clientX <= triggerRect.right &&
+			e.clientY >= triggerRect.top &&
+			e.clientY <= triggerRect.bottom;
+
+		if (!isOverTrigger) hide();
 	}
 
 	$effect(() => {
 		if (showTooltip && tooltipElement) {
 			document.body.appendChild(tooltipElement);
+			document.addEventListener("mousemove", handleGlobalMouseMove);
 		}
 
 		return () => {
 			if (tooltipElement && tooltipElement.parentNode === document.body) {
 				document.body.removeChild(tooltipElement);
 			}
+			document.removeEventListener("mousemove", handleGlobalMouseMove);
 		};
 	});
 </script>
@@ -94,7 +109,7 @@
 	</span>
 {/if}
 
-<style>
+<style lang="postcss">
 	.tooltip {
 		--border-size: 1px;
 		@apply fixed bg-panel-alt text-foreground border border-stone-400 dynadark:border-white drop-shadow-lg text-xs rounded-full pointer-events-none z-[999] max-w-xs break-words whitespace-normal;

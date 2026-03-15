@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { duration, fade } from "$lib/animation";
+	import { duration, fade } from "$lib/util/animation";
 	import { quintOut } from "svelte/easing";
 	import Dialog from "../functional/Dialog.svelte";
 	import {
@@ -26,9 +26,9 @@
 			easing: quintOut,
 		}}
 	>
-		{#each dialogList as { id, title, message, buttons, type }, i}
+		{#each dialogList as dialog, i}
 			{#if i === 0}
-				<Dialog {id} {title} {message} {buttons} {type} />
+				<Dialog {...dialog} />
 			{/if}
 		{/each}
 	</div>

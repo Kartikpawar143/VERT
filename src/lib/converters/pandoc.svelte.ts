@@ -2,8 +2,8 @@ import { VertFile, type WorkerMessage } from "$lib/types";
 import { Converter, FormatInfo } from "./converter.svelte";
 import { browser } from "$app/environment";
 import PandocWorker from "$lib/workers/pandoc?worker&url";
-import { error, log } from "$lib/logger";
-import { ToastManager } from "$lib/toast/index.svelte";
+import { error, log } from "$lib/util/logger";
+import { ToastManager } from "$lib/util/toast.svelte";
 import { m } from "$lib/paraglide/messages";
 
 export class PandocConverter extends Converter {
@@ -26,9 +26,13 @@ export class PandocConverter extends Converter {
 				this.status = "ready";
 			} catch (err) {
 				this.status = "error";
+				error(
+					["converters", this.name],
+					`Failed to load Pandoc worker: ${err}`,
+				);
 				ToastManager.add({
 					type: "error",
-					message: `Failed to load Pandoc worker: ${err}`, // TODO: i18n
+					message: m["workers.errors.pandoc"](),
 				});
 			}
 		})();

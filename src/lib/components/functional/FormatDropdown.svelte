@@ -1,12 +1,13 @@
 <script lang="ts">
-	import { duration, fade, transition } from "$lib/animation";
+	import { duration, fade, transition } from "$lib/util/animation";
 	import { m } from "$lib/paraglide/messages";
-	import { isMobile, files } from "$lib/store/index.svelte";
+	import { isMobile, files, dropdownStates } from "$lib/store/index.svelte";
 	import type { Categories } from "$lib/types";
 	import clsx from "clsx";
 	import { ChevronDown, SearchIcon } from "lucide-svelte";
 	import { onMount } from "svelte";
 	import { quintOut } from "svelte/easing";
+	import { VertFile } from "$lib/types";
 
 	type Props = {
 		categories: Categories;
@@ -15,6 +16,7 @@
 		onselect?: (option: string) => void;
 		disabled?: boolean;
 		dropdownSize?: "default" | "large" | "small";
+		file?: VertFile;
 	};
 
 	let {
@@ -24,6 +26,7 @@
 		onselect,
 		disabled,
 		dropdownSize = "default",
+		file,
 	}: Props = $props();
 	let open = $state(false);
 	let dropdown = $state<HTMLDivElement>();
@@ -36,24 +39,46 @@
 	// initialize current category
 	$effect(() => {
 		if (currentCategory) return;
-		let foundCat: string | undefined;
 
-		if (selected) {
-			foundCat = Object.keys(categories).find((cat) =>
-				categories[cat].formats.includes(selected),
-			);
-		} else {
-			// find category based on file types
-			const fileFormats = files.files.map((f) => f.from);
-			foundCat = Object.keys(categories).find((cat) =>
-				fileFormats.some((format) =>
-					categories[cat].formats.includes(format),
-				),
-			);
-		}
+		// find the category whose formats overlap most with the converters for this file (or all files)
+		// this finds the best matching category based on the formats supported by the converters
+		const pickCategoryFromConverters = (
+			convList: VertFile["converters"],
+		) => {
+			let bestCategory: string | null = null;
+			let maxOverlap = 0;
 
-		currentCategory = foundCat || Object.keys(categories)[0] || null;
-		rootCategory = currentCategory;
+			for (const cat of Object.keys(categories)) {
+				const overlapCount = categories[cat].formats.filter((fmt) =>
+					convList.some((conv) => conv.formatStrings().includes(fmt)),
+				).length;
+
+				if (overlapCount > maxOverlap) {
+					maxOverlap = overlapCount;
+					bestCategory = cat;
+				}
+			}
+
+			return bestCategory;
+		};
+
+		// decide which converters to use to detect category:
+		// - if file provided, prefer its primary converter -- individual file dropdown
+		// - if no file provided, use all converters from all files -- "set all to" dropdown
+		const convertersToCheck = file
+			? file.findConverter()
+				? [file.findConverter()!]
+				: file.converters
+			: files.files.flatMap((f) => f.converters);
+
+		// pick the best matching category, or fall back to first category
+		// TODO: if something fails for some reason, maybe show all categories?
+		const detectedCategory =
+			pickCategoryFromConverters(convertersToCheck) ||
+			Object.keys(categories)[0];
+
+		currentCategory = detectedCategory;
+		rootCategory = detectedCategory;
 	});
 
 	// other available categories based on current category (e.g. converting between video and audio)
@@ -66,6 +91,15 @@
 				categories[rootCategory!]?.canConvertTo?.includes(cat),
 		);
 		if (from === ".gif") finalCategories.push("video");
+
+		// filter out categories that can't handle large files (due to browser/device limitations)
+		if (file && file.isLarge()) {
+			// if file is large video, disable audio conversion
+			if (rootCategory === "video")
+				finalCategories = finalCategories.filter(
+					(cat) => cat !== "audio",
+				);
+		}
 
 		return finalCategories;
 	});
@@ -154,6 +188,14 @@
 	const selectOption = (option: string) => {
 		selected = option;
 		open = false;
+
+		// save user's selection to dropdownStates for this session
+		if (file) {
+			dropdownStates.update((states) => {
+				const updated = { ...states, [file.name]: option };
+				return updated;
+			});
+		}
 
 		// find the category of this option if it's not in the current category
 		if (
@@ -254,6 +296,33 @@
 				searchInput.select();
 			}
 		}, 0); // let dropdown open first
+	};
+
+	const extract = async () => {
+		// extract all files in zip, then add all extracted files to files store
+		if (!file) return;
+		const { extractZip } = await import("$lib/util/zip");
+		const extractedFiles = await extractZip(file.file);
+
+		if (!Array.isArray(extractedFiles) || extractedFiles.length === 0)
+			return;
+
+		const newFiles = extractedFiles
+			.map(({ filename, data }) => {
+				try {
+					const f = new File([new Uint8Array(data)], filename, {
+						type: "application/octet-stream",
+					});
+					const ext = filename.split(".").pop() ?? "";
+					return new VertFile(f, ext);
+				} catch (err) {
+					return null;
+				}
+			})
+			.filter(Boolean);
+
+		files.files = files.files.filter((f) => f !== file);
+		newFiles.forEach((f) => files.add(f));
 	};
 
 	onMount(() => {
@@ -414,11 +483,23 @@
 				{:else}
 					<div class="col-span-3 text-center p-4 text-muted">
 						{searchQuery
-							? "No formats match your search"
-							: "No formats available"}
+							? m["convert.dropdown.no_results"]()
+							: m["convert.dropdown.no_formats"]()}
 					</div>
 				{/if}
 			</div>
+			<!-- format options -->
+			<!-- TODO: extract zip, image sequence & fps -->
+			{#if file?.name.toLowerCase().endsWith(".zip")}
+				<div class="border-t border-separator text-base p-2">
+					<button
+						class="w-full p-2 text-center rounded-lg bg-accent text-black"
+						onclick={() => extract()}
+					>
+						{m["convert.archive_file.extract"]()}
+					</button>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>

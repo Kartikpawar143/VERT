@@ -17,7 +17,7 @@
 	import { m } from "$lib/paraglide/messages";
 	import Dropdown from "$lib/components/functional/Dropdown.svelte";
 	import FancyInput from "$lib/components/functional/FancyInput.svelte";
-	import { effects } from "$lib/store/index.svelte";
+	import { effects, sanitize } from "$lib/store/index.svelte";
 	import FormatDropdown from "$lib/components/functional/FormatDropdown.svelte";
 	import { categories } from "$lib/converters";
 	import clsx from "clsx";
@@ -43,7 +43,7 @@
 						{m["settings.conversion.filename_format"]()}
 					</p>
 					<p class="text-sm text-muted font-normal">
-						{@html m["settings.conversion.filename_description"]()}
+						{@html sanitize(m["settings.conversion.filename_description"]())}
 					</p>
 				</div>
 				<FancyTextInput
@@ -102,7 +102,7 @@
 											size="24"
 											class="inline-block mr-2"
 										/>
-										Enable
+										{m["settings.conversion.default_format_enable"]()}
 									</button>
 
 									<button
@@ -118,7 +118,7 @@
 											size="24"
 											class="inline-block mr-2"
 										/>
-										Disable
+										{m["settings.conversion.default_format_disable"]()}
 									</button>
 								</div>
 							</div>

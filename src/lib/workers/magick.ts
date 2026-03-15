@@ -7,7 +7,7 @@ import {
 	type IMagickImage,
 } from "@imagemagick/magick-wasm";
 import { makeZip } from "client-zip";
-import { parseAni } from "$lib/parse/ani";
+import { parseAni } from "$lib/util/parse/ani";
 import { parseIcns } from "vert-wasm";
 import type { WorkerMessage } from "$lib/types";
 
@@ -292,6 +292,21 @@ const magickConvert = async (
 ) => {
 	let fmt = to.slice(1).toUpperCase();
 	if (fmt === "JFIF") fmt = "JPEG";
+
+	// ICO size clamp to avoid WidthOrHeightExceedsLimit
+	if (fmt === "ICO") {
+		const max = 256;
+		const w = img.width;
+		const h = img.height;
+
+		if (w > max || h > max) {
+			const scale = max / Math.max(w, h);
+			const newW = Math.max(1, Math.round(w * scale));
+			const newH = Math.max(1, Math.round(h * scale));
+
+			img.resize(newW, newH);
+		}
+	}
 
 	const result = await new Promise<Uint8Array>((resolve, reject) => {
 		try {

@@ -17,8 +17,7 @@
 		"subtitle": "Tout le traitement des images, des fichiers audio et des documents s'effectue sur votre appareil. Les vidéos sont converties sur nos serveurs ultra-rapides. Aucune limite de taille de fichier, aucune publicité et entièrement open source.",
 		"uploader": {
 			"text": "Déposer ou cliquer pour {action}",
-			"convert": "convertir",
-			"jpegify": "jpegify"
+			"convert": "convertir"
 		},
 		"cards": {
 			"title": "VERT supports...",
@@ -101,10 +100,13 @@
 		},
 		"conversion": {
 			"title": "Conversion",
+			"advanced_settings": "Paramètres avancés",
 			"filename_format": "Format du nom de fichier",
 			"filename_description": "Cela déterminera le nom du fichier lors du téléchargement, <b>sans inclure l'extension du fichier.</b> Vous pouvez mettre les modèles suivants dans le format, qui seront remplacés par les informations pertinentes: <b>%name%</b> pour le nom du fichier d'origine, <b>%extension%</b> pour l'extension du fichier d'origine et <b>%date%</b> pour une chaîne de date indiquant quand le fichier a été converti.",
 			"placeholder": "VERT_%name%",
 			"default_format": "Format de conversion par défaut",
+			"default_format_enable": "Activer",
+			"default_format_disable": "Désactiver",
 			"default_format_description": "Cela modifiera le format par défaut sélectionné lorsque vous téléchargez un fichier de ce type de format.",
 			"default_format_image": "Images",
 			"default_format_video": "Videos",
@@ -190,7 +192,7 @@
 			"notable_contributors": "Contributeurs notables",
 			"notable_description": "Nous tenons à remercier ces personnes pour leurs contributions majeures à VERT.",
 			"github_contributors": "Les contributeurs de GitHub",
-			"github_description": "Un grand [jpegify_link]merci[/jpegify_link] à toutes ces personnes pour leur aide ! [github_link]Vous voulez aussi aider ?[/github_link]",
+			"github_description": "Un grand merci à toutes ces personnes pour leur aide ! [github_link]Vous voulez aussi aider ?[/github_link]",
 			"no_contributors": "Il semble que personne n'ait encore contribué... [contribute_link]soyez le premier à contribuer ![/contribute_link]",
 			"libraries": "Bibliothèques",
 			"libraries_description": "un grand merci à FFmpeg (audio, video), ImageMagick (images) et Pandoc (documents) pour avoir maintenu d'aussi excellentes bibliothèques pendant tant d'années, VERT compte sur eux pour vous fournir vos conversions.",
@@ -215,12 +217,5 @@
 			"no_audio": "Aucun flux audio détécté.",
 			"invalid_rate": "Taux d'échantillonnage spécifié non valide: {rate}Hz"
 		}
-	},
-	"jpegify": {
-		"title": "SECRET JPEGIFY!!!",
-		"subtitle": "(chut... ne le dis à personne !)",
-		"button": "JPEGIFY {compression}%!!!",
-		"download": "Télécharger",
-		"delete": "Supprimer"
 	}
 }

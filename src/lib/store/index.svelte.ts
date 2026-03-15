@@ -1,6 +1,6 @@
 import { browser } from "$app/environment";
 import { byNative, converters } from "$lib/converters";
-import { error, log } from "$lib/logger";
+import { error, log } from "$lib/util/logger";
 import { VertFile } from "$lib/types";
 import { parseBlob, selectCover } from "music-metadata";
 import { writable } from "svelte/store";
@@ -8,6 +8,9 @@ import { addDialog } from "./DialogProvider";
 import PQueue from "p-queue";
 import { getLocale, setLocale } from "$lib/paraglide/runtime";
 import { m } from "$lib/paraglide/messages";
+import sanitizeHtml from "sanitize-html";
+import { ToastManager } from "$lib/util/toast.svelte";
+import { GB } from "$lib/util/consts";
 
 class Files {
 	public files = $state<VertFile[]>([]);
@@ -123,11 +126,9 @@ class Files {
 
 		// check if completely transparent
 		const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-		const isTransparent = Array.from(imageData.data).every(
-			(value, index) => {
-				return (index + 1) % 4 !== 0 || value === 0;
-			},
-		);
+		const isTransparent = Array.from(imageData.data).every((value, index) => {
+			return (index + 1) % 4 !== 0 || value === 0;
+		});
 		if (isTransparent) {
 			canvas.remove();
 			return undefined;
@@ -138,12 +139,131 @@ class Files {
 		return url;
 	}
 
+	private async _handleZipFile(file: File): Promise<void> {
+		try {
+			log(["files"], `extracting zip file: ${file.name}`);
+			ToastManager.add({
+				type: "info",
+				message: m["convert.archive_file.extracting"]({
+					filename: file.name,
+				}),
+			});
+
+			const { extractZip } = await import("$lib/util/zip");
+			const entries = await extractZip(file);
+
+			const totalEntries = entries.length;
+			log(["files"], `extracted ${totalEntries} files from zip`);
+
+			// check if all files in zip use the same converter and are compatible
+			const convertersUsed = new Set<string>();
+			let incompatibleFiles = false;
+
+			for (const { filename } of entries) {
+				const format = "." + filename.split(".").pop()?.toLowerCase();
+				if (!format || format === ".zip") {
+					incompatibleFiles = true;
+					continue;
+				}
+
+				const converter = converters
+					.sort(byNative(format))
+					.find((c) => c.formatStrings().includes(format));
+
+				if (converter) convertersUsed.add(converter.name);
+				else incompatibleFiles = true;
+			}
+
+			const converterCount = convertersUsed.size;
+			const canConvertAsOne = converterCount === 1 && !incompatibleFiles;
+
+			log(
+				["files"],
+				`extracted ${entries.length} files from zip (converters: ${converterCount}, compatible: ${canConvertAsOne})`,
+			);
+
+			if (canConvertAsOne) {
+				// all files use same converter - add zip as a single VertFile file
+				const vf = new VertFile(file, ".zip");
+				vf.converters = converters.filter(
+					(c) => c.name === Array.from(convertersUsed)[0],
+				);
+
+				const converterName = vf.converters[0].name;
+				const type =
+					converterName === "imagemagick"
+						? "image"
+						: converterName === "ffmpeg"
+							? "audio"
+							: converterName === "pandoc"
+								? "doc"
+								: "video";
+
+				this.files.push(vf);
+				this._addThumbnail(vf);
+
+				ToastManager.add({
+					type: "success",
+					message: m["convert.archive_file.detected"]({
+						type: m[`convert.archive_file.${type}`](),
+						filename: file.name,
+					}),
+				});
+			} else {
+				// mixed converters/incompatible files - extract all individually
+				for (const { filename, data } of entries) {
+					this._add(
+						new File([new Uint8Array(data)], filename, {
+							type: "application/octet-stream",
+						}),
+					);
+				}
+
+				ToastManager.add({
+					type: "success",
+					message: m["convert.archive_file.extracted"]({
+						filename: file.name,
+						extract_count: entries.length,
+						ignore_count: 0,
+					}),
+				});
+			}
+		} catch (e) {
+			error(["files"], `error processing zip file: ${e}`);
+			throw e;
+		}
+	}
+
 	private _warningShown = false;
-	private _add(file: VertFile | File) {
+	private async _add(file: VertFile | File) {
 		if (file instanceof VertFile) {
 			this.files.push(file);
 			this._addThumbnail(file);
 		} else {
+			// if zip, extract and add contents
+			const isZip =
+				file.name.toLowerCase().endsWith(".zip") ||
+				file.type === "application/zip" ||
+				file.type === "application/x-zip-compressed";
+
+			if (isZip) {
+				try {
+					await this._handleZipFile(file);
+					return;
+				} catch (err) {
+					error(["files"], `error extracting zip file: ${err}`);
+					ToastManager.add({
+						type: "error",
+						message: m["convert.archive_file.extract_error"]({
+							filename: file.name,
+							error: String(err),
+						}),
+					});
+					return;
+				}
+			}
+
+			// regular files
 			const format = "." + file.name.split(".").pop()?.toLowerCase();
 			if (!format) {
 				log(["files"], `no extension found for ${file.name}`);
@@ -151,9 +271,7 @@ class Files {
 			}
 			const converter = converters
 				.sort(byNative(format))
-				.find((converter) =>
-					converter.formatStrings().includes(format),
-				);
+				.find((converter) => converter.formatStrings().includes(format));
 			if (!converter) {
 				log(["files"], `no converter found for ${file.name}`);
 				this.files.push(new VertFile(file, format));
@@ -168,7 +286,20 @@ class Files {
 			this.files.push(vf);
 			this._addThumbnail(vf);
 
-			const isVideo = converter.name === "vertd";
+			const convName = converter.name;
+			if (file.size > MAX_ARRAY_BUFFER_SIZE && convName === "vertd") {
+				ToastManager.add({
+					type: "warning",
+					message: m["convert.large_file_warning"]({
+						limit: (MAX_ARRAY_BUFFER_SIZE / GB).toFixed(2),
+					}),
+					durations: {
+						stay: 10000,
+					},
+				});
+			}
+
+			const isVideo = convName === "vertd";
 			const acceptedExternalWarning =
 				localStorage.getItem("acceptedExternalWarning") === "true";
 			if (isVideo && !acceptedExternalWarning && !this._warningShown) {
@@ -181,10 +312,7 @@ class Files {
 						action: () => {
 							this.files = [
 								...this.files.filter(
-									(f) =>
-										!f.converters
-											.map((c) => c.name)
-											.includes("vertd"),
+									(f) => !f.converters.map((c) => c.name).includes("vertd"),
 								),
 							];
 							this._warningShown = false;
@@ -193,10 +321,7 @@ class Files {
 					{
 						text: m["convert.external_warning.yes"](),
 						action: () => {
-							localStorage.setItem(
-								"acceptedExternalWarning",
-								"true",
-							);
+							localStorage.setItem("acceptedExternalWarning", "true");
 							this._warningShown = false;
 						},
 					},
@@ -212,14 +337,7 @@ class Files {
 	public add(file: VertFile[] | null | undefined): void;
 	public add(file: FileList | null | undefined): void;
 	public add(
-		file:
-			| VertFile
-			| File
-			| VertFile[]
-			| File[]
-			| FileList
-			| null
-			| undefined,
+		file: VertFile | File | VertFile[] | File[] | FileList | null | undefined,
 	) {
 		if (!file) return;
 		if (Array.isArray(file) || file instanceof FileList) {
@@ -245,13 +363,15 @@ class Files {
 		for (let i = 0; i < files.files.length; i++) {
 			const file = files.files[i];
 			const result = file.result;
-			let to = file.to;
-			if (!to.startsWith(".")) to = `.${to}`;
 
 			if (!result) {
 				error(["files"], "No result found");
 				continue;
 			}
+
+			let to = result.to;
+			if (!to.startsWith(".")) to = `.${to}`;
+
 			dlFiles.push({
 				name: file.file.name.replace(/\.[^/.]+$/, "") + to,
 				lastModified: Date.now(),
@@ -312,6 +432,7 @@ export const gradientColor = writable("");
 export const goingLeft = writable(false);
 export const dropping = writable(false);
 export const vertdLoaded = writable(false);
+export const dropdownStates = writable<Record<string, string>>({});
 
 export const isMobile = writable(false);
 export const effects = writable(true);
@@ -323,11 +444,16 @@ export const availableLocales = {
 	fr: "Français",
 	de: "Deutsch",
 	it: "Italiano",
+	ba: "Bosanski",
 	hr: "Hrvatski",
 	id: "Bahasa Indonesia",
 	tr: "Türkçe",
 	ja: "日本語",
+	ko: "한국어",
 	el: "Ελληνικά",
+	"zh-Hans": "简体中文",
+	"zh-Hant": "繁體中文",
+	"pt-BR": "Português (Brasil)",
 };
 
 export function updateLocale(newLocale: string) {
@@ -373,3 +499,77 @@ export function link(
 
 	return result;
 }
+
+export function sanitize(
+	html: string,
+	allowedTags: string[] = ["a", "b", "code", "br"],
+): string {
+	return sanitizeHtml(html, {
+		allowedTags: allowedTags,
+		allowedAttributes: {
+			a: ["href", "target", "rel", "class"],
+			"*": ["class"],
+		},
+		allowedSchemes: ["http", "https", "mailto", "blob"],
+	});
+}
+
+/**
+ * Binary search for a max value without knowing the exact value, only that it
+ * can be under or over It dose not test every number but instead looks for
+ * 1,2,4,8,16,32,64,128,96,95 to figure out that you thought about #96 from
+ * 0-infinity
+ *
+ * @example findFirstPositive(x => matchMedia(`(max-resolution: ${x}dpi)`).matches)
+ * @author Jimmy Wärting
+ * @see {@link https://stackoverflow.com/a/72124984/1008999}
+ * @param {function} f The function to run the test on (should return truthy or falsy values)
+ * @param {bigint} [b=1] Where to start looking from
+ * @param {function} d privately used to calculate the next value to test
+ * @returns {bigint} Integer
+ */
+function findFirstPositive(
+	f: (x: bigint) => number,
+	b = 1n,
+	d = (e: bigint, g: bigint, c?: bigint): bigint =>
+		g < e
+			? -1n
+			: 0 < f((c = (e + g) >> 1n))
+				? c == e || 0 >= f(c - 1n)
+					? c
+					: d(e, c - 1n)
+				: d(c + 1n, g),
+): bigint {
+	for (; 0 >= f(b); b <<= 1n);
+	return d(b >> 1n, b) - 1n;
+}
+
+export const getMaxArrayBufferSize = (): number => {
+	if (typeof window === "undefined") return 2 * GB; // default for SSR
+
+	// check cache first
+	const cached = localStorage.getItem("maxArrayBufferSize");
+	if (cached) {
+		const parsed = Number(cached);
+		log(["converters"], `using cached max ArrayBuffer size: ${parsed} bytes`);
+		if (!isNaN(parsed) && parsed > 0) return parsed;
+	}
+
+	// detect max size using binary search
+	const maxSize = findFirstPositive((x) => {
+		try {
+			new ArrayBuffer(Number(x));
+			return 0; // false = can allocate
+		} catch {
+			return 1; // true = cannot allocate
+		}
+	});
+
+	const result = Number(maxSize);
+	localStorage.setItem("maxArrayBufferSize", result.toString());
+	log(["converters"], `detected max ArrayBuffer size: ${result} bytes`);
+
+	return result;
+};
+
+export const MAX_ARRAY_BUFFER_SIZE = getMaxArrayBufferSize();

@@ -17,8 +17,7 @@
 		"subtitle": "Tüm görüntü, ses ve belge işlemleri cihazınızda gerçekleştirilir. Videolar, ışık hızındaki sunucularımızda dönüştürülür. Dosya boyutu sınırı ve reklam yoktur. Tamamen açık kaynaklıdır.",
 		"uploader": {
 			"text": "{action} için sürükleyip bırakın veya dosya seçin",
-			"convert": "dönüştürmek",
-			"jpegify": "jpegify"
+			"convert": "dönüştürmek"
 		},
 		"cards": {
 			"title": "VERT'in desteklediği formatlar...",
@@ -87,7 +86,6 @@
 			"audio": "ses",
 			"doc": "belge",
 			"image": "görsel"
-
 		}
 	},
 	"settings": {
@@ -211,7 +209,7 @@
 			"notable_contributors": "Önemli katılımcılar",
 			"notable_description": "VERT'e sağladıkları büyük katkılardan dolayı bu kişilere teşekkür ederiz.",
 			"github_contributors": "GitHub katılımcıları",
-			"github_description": "Yardımcı olan herkese çok [jpegify_link]teşekkürler[/jpegify_link]! [github_link]Sen de yardım etmek ister misin?[/github_link]",
+			"github_description": "Yardımcı olan herkese çok teşekkürler! [github_link]Sen de yardım etmek ister misin?[/github_link]",
 			"no_contributors": "Henüz kimse katkıda bulunmamış gibi görünüyor... [contribute_link]ilk katkıda bulunan sen ol![/contribute_link]",
 			"libraries": "Kütüphaneler",
 			"libraries_description": "Bu mükemmel kütüphaneleri yıllardır geliştirdikleri için FFmpeg (ses, video), ImageMagick (görseller) ve Pandoc (belgeler)'a çok teşekkür ederiz. VERT, dönüştürme işlemleri için bu kütüphaneleri kullanmaktadır.",
@@ -229,19 +227,12 @@
 	},
 	"workers": {
 		"errors": {
-			"general": "{dosya} dönüştürülürken hata oluştu: {message}",
-			"cancel": "{dosya} için dönüştürme işlemi iptal edilirken hata oluştu: {message}",
+			"general": "{file} dönüştürülürken hata oluştu: {message}",
+			"cancel": "{file} için dönüştürme işlemi iptal edilirken hata oluştu: {message}",
 			"magick": "Magick işlemi sırasında hata oluştu, görsel dönüştürme işlemi beklendiği gibi çalışmayabilir.",
 			"ffmpeg": "ffmpeg yüklenirken hata oluştu, bazı özellikler çalışmayabilir.",
 			"no_audio": "Ses akışı bulunamadı.",
-			"invalid_rate": "Geçersiz örnekleme hızı: {hız}Hz"
+			"invalid_rate": "Geçersiz örnekleme hızı: {rate}Hz"
 		}
-	},
-	"jpegify": {
-		"title": "GİZLİ JPEGIFY!!!",
-		"subtitle": "(şşş... kimseye söyleme!)",
-		"button": "JPEGIFY {compression}%!!!",
-		"download": "İndir",
-		"delete": "Sil"
 	}
 }
